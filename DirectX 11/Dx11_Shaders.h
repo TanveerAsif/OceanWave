@@ -10,13 +10,24 @@ struct stMatrixBufferType
 	D3DXMATRIX world;
 	D3DXMATRIX view;
 	D3DXMATRIX projection;
+	
+	D3DXVECTOR3 vCameraPosition;	
+	float	    padding;
 };
 
 
 struct stOceanTimeBufferType
 {
 	float fTime;
-	float padding[3];							//TO MAKE MULTIPLE OF 16
+	float fDelta;							//TO MAKE MULTIPLE OF 16Byte
+	float padding[2];							//TO MAKE MULTIPLE OF 16Byte
+};
+
+struct stFogParameter
+{
+	float fFogStart;
+	float fFogEnd;
+	D3DXVECTOR2 padding;							//TO MAKE MULTIPLE OF 16Byte
 };
 
 struct stMatrixBufferShadowMap
@@ -96,7 +107,7 @@ private:
 	ID3D11Buffer       *m_pMatrixBuffer;
 
 
-	ID3D11SamplerState	*m_pSamplerState, *m_pSamplerStateWarp, *m_pSamplerStateClamp;
+	ID3D11SamplerState	*m_pSamplerState, *m_pSamplerStateWarp, *m_pSamplerStateClamp, *m_pSamplerStateMirror;
 	ID3D11Buffer		*m_pTransparency;
 
 	ID3D11Buffer        *m_pRefMatrixBuffer;
@@ -109,6 +120,8 @@ private:
 	ID3D11Buffer        *m_pLightViewMatrixBuffer;//SHADOW MAP
 
 	ID3D11Buffer		*m_pOceanTickBuffer, *m_pSunInfoBuffer;
+	ID3D11Buffer		*m_pFogBuffer;
+
 public:
 	Dx11_Shaders();
 	~Dx11_Shaders();
@@ -126,13 +139,13 @@ public:
 	bool InitializeShadowMapShader(ID3D11Device *pDevice, WCHAR *pShaderFilename);
 	bool InitializeDepthMapShader(ID3D11Device *pDevice, WCHAR *pShaderFilename);
 	bool InitializeOceanShader(ID3D11Device *pDevice, WCHAR *pShaderFilename);
-
-
+	bool InitializeFogShader(ID3D11Device *pDevice, WCHAR *pShaderFilename);
+	bool InitializeArrowShader(ID3D11Device *pDevice, WCHAR *ShaderFilename);
 	void Shutdown();
 
 	bool SetShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX);
 	bool SetShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV);
-	bool SetSkyShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV);
+	bool SetSkyShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos);
 	bool SetCubeShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV);
 	bool SetDepthMapModelShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV);
 	bool SetShadowMapParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pDepthTextureRV, ID3D11ShaderResourceView *pTextureRV, D3DXMATRIX lightViewMatrix, D3DXMATRIX lightProjectionMatrix,
@@ -141,16 +154,17 @@ public:
 	bool SetShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV, D3DXVECTOR4 color);
 	
 	//LIGHT SHADER
-	bool SetShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV, D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight, D3DXVECTOR3 dir);
+	bool SetShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV, D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight, D3DXVECTOR3 dir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos);
 
 	bool SetShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX
 							, ID3D11ShaderResourceView *pTextureRV
 							, ID3D11ShaderResourceView *pReflectionTextureRV	
 							, D3DXMATRIX refViewMatrix);
-	bool SetOceanShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 Sun_AmbientLight, D3DXVECTOR3 sunDir);
+	bool SetOceanShaderParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 Sun_AmbientLight, D3DXVECTOR3 sunDir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos);
+	bool SetArrowParameters(ID3D11DeviceContext*, D3DXMATRIX, D3DXMATRIX, D3DXMATRIX, ID3D11ShaderResourceView *pTextureRV);
 	
 	void RenderShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat);
-	void RenderSkyShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV);
+	void RenderSkyShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos);
 	void RenderCubeShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV);
 	void RenderDepthMapModelShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV);
 	void RenderParticleShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV);
@@ -159,7 +173,7 @@ public:
 	//LIGHT SOURCE EFFECT
 	void RenderShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, 
 					  ID3D11ShaderResourceView *pTextureRV,
-					  D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight, D3DXVECTOR3 dir);
+					  D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight, D3DXVECTOR3 dir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos);
 
 	void RenderShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTexture, ID3D11ShaderResourceView *pReflectionTexture, D3DXMATRIX reflectionMatrix);
 
@@ -167,7 +181,12 @@ public:
 	void RenderShadowMap(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pDepthTextureRV, ID3D11ShaderResourceView *pTextureRV, D3DXMATRIX sunViewMat, D3DXMATRIX sunProjectionMat,
 		D3DXVECTOR4 ambientLight, D3DXVECTOR4 diffuseLight, D3DXVECTOR3 dirLight);
 	void RenderDepthMap(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat);
-	void RenderOceanShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 Sun_AmbientLight, D3DXVECTOR3 sunDir);
 
+	//OCEAN
+	void RenderOceanShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 Sun_AmbientLight, D3DXVECTOR3 sunDir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos);
+
+	
+	//ARROW
+	void RenderArrowShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTexture);
 };
 

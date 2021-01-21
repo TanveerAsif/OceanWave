@@ -148,7 +148,16 @@ void Dx11_Render2Texture::BeginScene(ID3D11DeviceContext *pContext)
 	if (pContext)
 	{
 		float clearColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
-		pContext->ClearRenderTargetView(m_pRenderTargetView, clearColor);
+		BeginScene(pContext, clearColor);
+	}
+}
+
+void Dx11_Render2Texture::BeginScene(ID3D11DeviceContext *pContext, float *pClearColor)
+{
+	if (pContext)
+	{		
+		float col[] = { pClearColor[0], pClearColor[1], pClearColor[2], pClearColor[3] };
+		pContext->ClearRenderTargetView(m_pRenderTargetView, col);
 		pContext->ClearDepthStencilView(m_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 	}

@@ -1,6 +1,7 @@
 #include "Dx11_Engine.h"
 
 
+
 static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 static Dx11_Engine *g_pEngineHandler;
 
@@ -168,6 +169,12 @@ void Dx11_Engine::Run()
 			m_pGraphics->UpdateCamera(VK_NEXT);
 		}
 
+		if (m_pInput->IsKeyDown('F'))
+		{
+			m_pInput->KeyUp('F');
+			m_pGraphics->SetFogParameter();
+		}
+
 		if (msg.message == WM_MOUSEWHEEL)
 		{			
 			m_pGraphics->UpdateCamera('T');
@@ -208,7 +215,8 @@ bool Dx11_Engine::InitializeWindow()
 
 
 	m_hWnd = CreateWindowEx(WS_EX_APPWINDOW, L"Engine", L"Engine", WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP
-		, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)
+		//, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)
+		, 410, 110, 1500, 900
 		, 0, 0, m_hInstance, NULL);
 	if (m_hWnd == NULL)
 		return false;

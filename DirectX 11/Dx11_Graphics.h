@@ -10,6 +10,7 @@
 #include "Dx11_LightSource.h"
 #include "Dx11_ParticleSystem.h"
 #include "Dx11_Ocean.h"
+#include "Dx11_OnScreenRendering.h"
 
 
 class Dx11_Graphics
@@ -23,13 +24,13 @@ private:
 
 
 
-	Dx11_Model		*m_pModel, *m_pFloorModel, *m_pCubeModel, *m_pDepthModel, *m_pLightShaftGrid, *m_pSun, *m_pDepthMapModel;
-	Dx11_Shaders	*m_pShader, *m_pReflectionShader, *m_pCubeShader, *m_pDepthShader, *m_pLightShaftShader, *m_pShadowMapShader, *m_pDepthMapShader, *m_pDepthMapModelShader;
+	Dx11_Model		*m_pModel, *m_pFloorModel, *m_pCubeModel, *m_pDepthModel, *m_pLightShaftGrid, *m_pSun, *m_pDepthMapModel, *m_pArrowMesh = NULL;
+	Dx11_Shaders	*m_pShader, *m_pReflectionShader, *m_pCubeShader, *m_pDepthShader, *m_pLightShaftShader, *m_pShadowMapShader, *m_pDepthMapShader, *m_pDepthMapModelShader, *m_pArrowShader = NULL;
 	
 	Dx11_LightSource	*m_pLightSource;
 	Dx11_Shaders		*m_pLightSourceShader;
 
-	Dx11_Render2Texture /**m_pRender2Texture,*/ *m_pReflectionSurface, *m_pShadowMapSurface;
+	Dx11_Render2Texture /**m_pRender2Texture,*/ *m_pReflectionSurface, *m_pShadowMapSurface, *m_pScreenSurface = NULL;
 	
 
 	std::vector<FI_SimLightEx *>m_vLights;
@@ -53,7 +54,11 @@ private:
 	bool					m_bShowDepthMapEnable;
 
 	Dx11_Ocean		*m_pOceanWater;
-	Dx11_Shaders	*m_pOceanShader;
+	Dx11_Shaders	*m_pOceanShader;	
+
+	float            m_fFogStart, m_fFogEnd;
+
+	Dx11_OnScreenRendering *m_pOnScreenRendering = NULL;
 
 private:
 
@@ -61,6 +66,7 @@ private:
 	void RenderReflectionSurface(float _fTick);
 	void RenderToTexture(float _fTick);
 	void RenderScene(float _fTick);
+	void RenderWaterEffectsOnScreen(float _fTick);
 
 	void AddLight(LGT_LITCHR TypeOfLight, LGT_COLOR ColorOfLight);
 
@@ -79,6 +85,6 @@ public:
 	void ShowWireFrame();
 
 	void ShowDepthMap();
-
+	void SetFogParameter();
 };
 

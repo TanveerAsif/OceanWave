@@ -33,8 +33,7 @@ bool Dx11_Sky::InitSky(ID3D11Device *pDevice, WCHAR *pCloudTexture)
 	float fTheta, fPhi, fDeltaTheta, fDeltaPhi;
 	
 
-	fDeltaPhi = (D3DX_PI / 4) / (float)(m_nResPhi);
-	//fDeltaTheta = (D3DX_PI / 2) / (float)(m_nResTheta);
+	fDeltaPhi =  (D3DX_PI) / (float)(m_nResPhi - 1);
 	fDeltaTheta = (2 * D3DX_PI ) / (float)(m_nResTheta - 1);
 	
 	fTheta = 0;
@@ -43,10 +42,19 @@ bool Dx11_Sky::InitSky(ID3D11Device *pDevice, WCHAR *pCloudTexture)
 		fPhi = 0;
 		for (c = 0; c <m_nResPhi /*No of Points On Latitude */; c++)
 		{			
-			pSkyVertex[index].pos = D3DXVECTOR3(m_nRadius* sinf(fPhi)*cosf(fTheta), m_nRadius* cosf(fPhi), m_nRadius* sinf(fPhi)*sinf(fTheta));
-			pSkyVertex[index].diffuse = D3DXCOLOR(1, 1, 1, 1);
-			pSkyVertex[index].tex = D3DXVECTOR2((float)(r + 1) / (float)m_nResPhi, (float)(c + 1) / (float)m_nResTheta);
+			pSkyVertex[index].pos = m_nRadius * D3DXVECTOR3(sinf(fPhi)*cosf(fTheta), cosf(fPhi), sinf(fPhi)*sinf(fTheta));
+			//pSkyVertex[index].pos = D3DXVECTOR3((float)c, 0, (float)(r));
+			pSkyVertex[index].diffuse = D3DXCOLOR(153/255.0f, 189/255.0f, 230/255.0f, 1.0f);
+			pSkyVertex[index].tex = D3DXVECTOR2((float)(c + 1) / (float)m_nResPhi, (float)(r + 1) / (float)m_nResTheta);
+			//pSkyVertex[index].tex = D3DXVECTOR2((float)(c + 1) / (float)m_nResPhi, (float)(r + 1) / (float)m_nResTheta);
 
+			/*
+			D3DXVECTOR3 n;
+			D3DXVec3Normalize(&n, &pSkyVertex[index].pos);
+			float u = atan2(n.x, n.z) / (2 * D3DX_PI) + 0.5;
+			float v = n.y*0.5 + 0.5;
+			pSkyVertex[index].tex = D3DXVECTOR2(u, v);			
+			*/
 			index++;
 			fPhi += fDeltaPhi;
 		}	

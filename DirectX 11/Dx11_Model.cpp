@@ -891,3 +891,93 @@ void Dx11_Model::RenderDepthMapModel(ID3D11DeviceContext *pDeviceContext)
 		pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
 }
+
+bool Dx11_Model::LoadArrowModel(ID3D11Device * pDevice)
+{
+
+	m_pTexture->Initiazlize(pDevice, L"Data/fiarrow fwd.dds");
+		
+	stVertexDepthMap *pVertices;
+	unsigned int  *pIndices;
+
+	m_nVertexCount = 4;
+	m_nIndexCount = 6;
+	pVertices = new stVertexDepthMap[m_nVertexCount];
+	pIndices = new unsigned int[m_nIndexCount];
+	pVertices[0].pos = D3DXVECTOR3(-1.0f, 0.0f, 1.0f);
+	pVertices[0].tex = D3DXVECTOR2(0.0f, 0.0f);
+
+	pVertices[1].pos = D3DXVECTOR3(1.0f, 0.0f, 1.0f);
+	pVertices[1].tex = D3DXVECTOR2(1.0f, 0.0f);	
+
+	pVertices[2].pos = D3DXVECTOR3(1.0f, 0.0f, -1.0f);
+	pVertices[2].tex = D3DXVECTOR2(1.0f, 1.0f);	
+
+
+	pVertices[3].pos = D3DXVECTOR3(-1.0f, 0.0f, -1.0f);
+	pVertices[3].tex = D3DXVECTOR2(0.0f, 1.0f);
+	
+
+	pIndices[0] = 0;
+	pIndices[1] = 1;
+	pIndices[2] = 2;
+	pIndices[3] = 2;
+	pIndices[4] = 3;
+	pIndices[5] = 0;
+
+
+	D3D11_BUFFER_DESC desc, indxDesc;
+	D3D11_SUBRESOURCE_DATA vertexData, indexData;
+	ZeroMemory(&desc, sizeof(desc));
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.ByteWidth = sizeof(stVertexDepthMap)* m_nVertexCount;
+	desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	desc.CPUAccessFlags = 0;
+	desc.MiscFlags = 0;
+	desc.StructureByteStride = 0;
+
+
+	ZeroMemory(&vertexData, sizeof(vertexData));
+	vertexData.pSysMem = pVertices;
+	vertexData.SysMemPitch = 0;
+	vertexData.SysMemSlicePitch = 0;
+	HRESULT hr = pDevice->CreateBuffer(&desc, &vertexData, &m_pVertexBuffer);
+	if (hr != S_OK)
+		return false;
+
+	ZeroMemory(&indxDesc, sizeof(indxDesc));
+	indxDesc.Usage = D3D11_USAGE_DEFAULT;
+	indxDesc.ByteWidth = sizeof(unsigned int)* m_nIndexCount;
+	indxDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	indxDesc.CPUAccessFlags = 0;
+	indxDesc.MiscFlags = 0;
+	indxDesc.StructureByteStride = 0;
+
+	ZeroMemory(&indexData, sizeof(indexData));
+	indexData.pSysMem = pIndices;
+	indexData.SysMemPitch = 0;
+	indexData.SysMemSlicePitch = 0;
+	hr = pDevice->CreateBuffer(&indxDesc, &indexData, &m_pIndexBuffer);
+	if (hr != S_OK)
+		return false;
+
+
+	delete[] pVertices;
+	delete[] pIndices;
+	pVertices = 0;
+	pIndices = 0;
+
+	return true;	
+}
+
+void Dx11_Model::RenderArrowModel(ID3D11DeviceContext * pDeviceContext)
+{
+	if (pDeviceContext)
+	{
+		UINT stride = sizeof(stVertexDepthMap);
+		UINT offset = 0;
+		pDeviceContext->IASetVertexBuffers(0, 1, &m_pVertexBuffer, &stride, &offset);
+		pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	}
+}

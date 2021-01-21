@@ -350,9 +350,10 @@ bool Dx11_Direct3D::BeginScene()
 
 	if (m_pDeviceContext)
 	{
-		//float color[4] = {0.0f, 0.0f, 0.0f, 1.0f };	//BLACK
+		float color[4] = {0.0f, 0.0f, 0.0f, 1.0f };	//BLACK
 		//float color[4] = { 1.0f, 1.0f, 1.0f, 1.0f };	//WHITE
-		float color[4] = { 0.0f, 0.0f, 0.8f, 1.0f };	//BLUE : SKY
+		//float color[4] = { 0.0f, 0.0f, 0.8f, 1.0f };	//BLUE : SKY
+		//float color[4] = { 0.5f, 0.5f, 0.5f, 1.0f };	//FOG
 		m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, color);
 		m_pDeviceContext->ClearDepthStencilView(m_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 

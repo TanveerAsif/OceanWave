@@ -28,7 +28,7 @@ bool Dx11_Ocean::InitializeOcean(ID3D11Device *pDevice, WCHAR *pTextureFile)
 	stOceanVertex *pVertices;
 	unsigned int  *pIndices;
 
-	int nPoints = 100;
+	int nPoints = 1200;
 	int nVertexCount =  nPoints * nPoints;
 	m_nIndexCount = (nPoints - 1)* (nPoints - 1) * 6;
 	pVertices = new stOceanVertex[nVertexCount];

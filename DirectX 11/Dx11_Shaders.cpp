@@ -22,6 +22,8 @@ Dx11_Shaders::Dx11_Shaders()
 
 	m_pOceanTickBuffer = NULL;
 	m_pSunInfoBuffer = NULL;
+
+	m_pFogBuffer = NULL;
 }
 
 
@@ -75,14 +77,14 @@ bool Dx11_Shaders::InitializeLightShader(ID3D11Device *pDevice, ID3D11DeviceCont
 
 
 	//m_pMatrixBuffer
-	D3D11_BUFFER_DESC matrixBufferDesc;
-	matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-	matrixBufferDesc.ByteWidth = sizeof(stMatrixBufferType);
-	matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	matrixBufferDesc.MiscFlags = 0;
-	matrixBufferDesc.StructureByteStride = 0;
-	hr = pDevice->CreateBuffer(&matrixBufferDesc, NULL, &m_pMatrixBuffer);
+	D3D11_BUFFER_DESC matBuffDesc;
+	matBuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	matBuffDesc.ByteWidth = sizeof(stMatrixBufferType);
+	matBuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	matBuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	matBuffDesc.MiscFlags = 0;
+	matBuffDesc.StructureByteStride = 0;
+	hr = pDevice->CreateBuffer(&matBuffDesc, NULL, &m_pMatrixBuffer);
 	if (hr != S_OK)
 		return false;
 	
@@ -513,7 +515,7 @@ bool Dx11_Shaders::SetCubeShaderParameters(ID3D11DeviceContext* pDeviceContext, 
 
 }
 
-bool Dx11_Shaders::SetSkyShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX ProjectionMat, ID3D11ShaderResourceView *pTextureRV)
+bool Dx11_Shaders::SetSkyShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX ProjectionMat, ID3D11ShaderResourceView *pTextureRV, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos)
 {
 	D3DXMatrixTranspose(&worldMat, &worldMat);
 	D3DXMatrixTranspose(&viewMat, &viewMat);
@@ -529,10 +531,23 @@ bool Dx11_Shaders::SetSkyShaderParameters(ID3D11DeviceContext* pDeviceContext, D
 	dataPtr->world = worldMat;
 	dataPtr->view = viewMat;
 	dataPtr->projection = ProjectionMat;
-
+	dataPtr->vCameraPosition = vCamPos;
 	pDeviceContext->Unmap(m_pMatrixBuffer, 0);
 
+	hr = pDeviceContext->Map(m_pFogBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	if (hr != S_OK)
+		return false;
+
+	stFogParameter *fogPtr;
+	fogPtr = (stFogParameter*)mappedResource.pData;
+	fogPtr->fFogStart = fFogStart;
+	fogPtr->fFogEnd = fFogEnd;
+	fogPtr->padding = D3DXVECTOR2(0.0f, 0.0f);
+	pDeviceContext->Unmap(m_pFogBuffer, 0);
+
 	pDeviceContext->VSSetConstantBuffers(0, 1, &m_pMatrixBuffer);
+	pDeviceContext->VSSetConstantBuffers(1, 1, &m_pFogBuffer);
+
 	pDeviceContext->PSSetShaderResources(0, 1, &pTextureRV);
 
 	return true;
@@ -649,16 +664,17 @@ void Dx11_Shaders::RenderCubeShader(ID3D11DeviceContext *pDeviceContext, int ind
 	}
 }
 
-void Dx11_Shaders::RenderSkyShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat,	ID3D11ShaderResourceView *pSRView)
+void Dx11_Shaders::RenderSkyShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat,	ID3D11ShaderResourceView *pSRView, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos)
 {
 	if (pDeviceContext)
 	{	
 		pDeviceContext->IASetInputLayout(m_pInputLayout);
-		if (SetSkyShaderParameters(pDeviceContext, worldMat, viewMat, projectionMat, pSRView))
+		if (SetSkyShaderParameters(pDeviceContext, worldMat, viewMat, projectionMat, pSRView, fFogStart,fFogEnd, vCamPos))
 		{			
 			pDeviceContext->VSSetShader(m_pVS, NULL, 0);
 			pDeviceContext->PSSetShader(m_pPS, NULL, 0);
-			pDeviceContext->PSSetSamplers(0, 1, &m_pSamplerState);			
+			//pDeviceContext->PSSetSamplers(0, 1, &m_pSamplerStateMirror);
+			pDeviceContext->PSSetSamplers(0, 1, &m_pSamplerState);
 			pDeviceContext->DrawIndexed(indexCount, 0, 0);
 		}
 
@@ -1077,7 +1093,22 @@ bool Dx11_Shaders::InitializeSkyShader(ID3D11Device *pDevice, WCHAR *pShaderFile
 	hr = D3DX11CompileFromFile(pShaderFile, NULL, NULL, "PS", "ps_4_0", D3D10_SHADER_ENABLE_STRICTNESS, 0, NULL
 		, &pPSBuffer, &pError, NULL);
 	if (hr != S_OK)
+	{
+		FILE *fp = NULL;
+		char *pCompileError = (char *)(pError->GetBufferPointer());
+		unsigned long bufferSize = pError->GetBufferSize();
+
+		fopen_s(&fp, "Data/ShaderCompileError.txt", "w");
+		if (fp)
+		{
+			for (int i = 0; i < bufferSize; i++)
+			{
+				fwrite(&pCompileError[i], sizeof(pCompileError[i]), 1, fp);
+			}
+			fclose(fp);
+		}
 		return false;
+	}
 
 
 	hr = pDevice->CreateVertexShader(pVSBuffer->GetBufferPointer(), pVSBuffer->GetBufferSize(), NULL, &m_pVS);
@@ -1101,6 +1132,21 @@ bool Dx11_Shaders::InitializeSkyShader(ID3D11Device *pDevice, WCHAR *pShaderFile
 	hr = pDevice->CreateInputLayout(inputLayout, numElements, pVSBuffer->GetBufferPointer(), pVSBuffer->GetBufferSize(), &m_pInputLayout);
 	if (hr != S_OK)
 		return false;
+
+
+	//m_pFogBuffer
+	D3D11_BUFFER_DESC fogBufferDesc;
+	fogBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	fogBufferDesc.ByteWidth = sizeof(stFogParameter);
+	fogBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	fogBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	fogBufferDesc.MiscFlags = 0;
+	fogBufferDesc.StructureByteStride = 0;
+	hr = pDevice->CreateBuffer(&fogBufferDesc, NULL, &m_pFogBuffer);
+	if (hr != S_OK)
+		return false;
+
+
 
 	D3D11_BUFFER_DESC matrixBufferDesc;
 	matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -1129,6 +1175,21 @@ bool Dx11_Shaders::InitializeSkyShader(ID3D11Device *pDevice, WCHAR *pShaderFile
 	samplerDesc.MinLOD = 0;
 	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 	hr = pDevice->CreateSamplerState(&samplerDesc, &m_pSamplerState);
+	if (hr != S_OK)
+		return false;
+
+	//D3D11_SAMPLER_DESC samplerDesc;
+	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+	samplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_MIRROR;//D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_MIRROR;//D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;//D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.MipLODBias = 0.0f;
+	samplerDesc.MaxAnisotropy = 1;
+	samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	samplerDesc.MinLOD = 0;
+	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+	hr = pDevice->CreateSamplerState(&samplerDesc, &m_pSamplerStateMirror);
 	if (hr != S_OK)
 		return false;
 
@@ -1243,6 +1304,18 @@ bool Dx11_Shaders::InitializeLightSourceShader(ID3D11Device *pDevice, WCHAR *pSh
 	if (hr != S_OK)
 		return false;
 
+	//m_pFogBuffer
+	D3D11_BUFFER_DESC fogBufferDesc;
+	fogBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	fogBufferDesc.ByteWidth = sizeof(stFogParameter);
+	fogBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	fogBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	fogBufferDesc.MiscFlags = 0;
+	fogBufferDesc.StructureByteStride = 0;
+	hr = pDevice->CreateBuffer(&fogBufferDesc, NULL, &m_pFogBuffer);
+	if (hr != S_OK)
+		return false;
+
 
 	pVSBuffer->Release();
 	pVSBuffer = 0;
@@ -1258,7 +1331,7 @@ bool Dx11_Shaders::InitializeLightSourceShader(ID3D11Device *pDevice, WCHAR *pSh
 bool Dx11_Shaders::SetShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX ProjectionMat, 
 										ID3D11ShaderResourceView *pTextureRV, 
 										D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight,
-										D3DXVECTOR3 dir)
+										D3DXVECTOR3 dir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos)
 {
 
 
@@ -1277,9 +1350,21 @@ bool Dx11_Shaders::SetShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DX
 	dataPtr->world = worldMat;
 	dataPtr->view = viewMat;
 	dataPtr->projection = ProjectionMat;
+	dataPtr->vCameraPosition = vCamPos;// D3DXVECTOR3(viewMat._41, viewMat._42, viewMat._43);
 	pDeviceContext->Unmap(m_pMatrixBuffer, 0);
-	pDeviceContext->VSSetConstantBuffers(0, 1, &m_pMatrixBuffer);	
 
+	hr = pDeviceContext->Map(m_pFogBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	if (hr != S_OK)
+		return false;
+	stFogParameter *pFogPara;
+	pFogPara = (stFogParameter*)mappedResource.pData;
+	pFogPara->fFogStart = fFogStart;
+	pFogPara->fFogEnd = fFogEnd;
+	pFogPara->padding = D3DXVECTOR2(0.0f, 0.0f);
+	pDeviceContext->Unmap(m_pFogBuffer, 0);
+
+	pDeviceContext->VSSetConstantBuffers(0, 1, &m_pMatrixBuffer);
+	pDeviceContext->VSSetConstantBuffers(1, 1, &m_pFogBuffer);
 
 	hr = pDeviceContext->Map(m_pLightBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	if (hr != S_OK)
@@ -1292,7 +1377,7 @@ bool Dx11_Shaders::SetShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DX
 	pLightSource->fPaddingValue = 0.0f;	
 	pDeviceContext->Unmap(m_pLightBuffer, 0);
 
-	pDeviceContext->PSSetConstantBuffers(0, 1, &m_pLightBuffer);
+	pDeviceContext->PSSetConstantBuffers(2, 1, &m_pLightBuffer);
 	pDeviceContext->PSSetShaderResources(0, 1, &pTextureRV);
 
 	
@@ -1303,11 +1388,11 @@ bool Dx11_Shaders::SetShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DX
 
 void Dx11_Shaders::RenderShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, 
 								ID3D11ShaderResourceView *pTextureRV, 
-								D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight, D3DXVECTOR3 dir)
+								D3DXVECTOR4 diffuseLight, D3DXVECTOR4 ambientLight, D3DXVECTOR3 dir, float fFogStart, float fFogEnd,D3DXVECTOR3 vCamPos)
 {
 	if (pDeviceContext)
 	{
-		if (SetShaderParameters(pDeviceContext, worldMat, viewMat, projectionMat, pTextureRV, diffuseLight, ambientLight, dir))
+		if (SetShaderParameters(pDeviceContext, worldMat, viewMat, projectionMat, pTextureRV, diffuseLight, ambientLight, dir, fFogStart, fFogEnd, vCamPos))
 		{
 			pDeviceContext->IASetInputLayout(m_pInputLayout);
 			pDeviceContext->VSSetShader(m_pVS, NULL, 0);
@@ -1908,6 +1993,18 @@ bool Dx11_Shaders::InitializeOceanShader(ID3D11Device *pDevice, WCHAR *pShaderFi
 	hr = pDevice->CreateBuffer(&matrixBufferDesc, NULL, &m_pMatrixBuffer);
 	if (hr != S_OK)
 		return false;
+
+	//m_pFogBuffer
+	D3D11_BUFFER_DESC fogBufferDesc;
+	fogBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	fogBufferDesc.ByteWidth = sizeof(stFogParameter);
+	fogBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	fogBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	fogBufferDesc.MiscFlags = 0;
+	fogBufferDesc.StructureByteStride = 0;
+	hr = pDevice->CreateBuffer(&fogBufferDesc, NULL, &m_pFogBuffer);
+	if (hr != S_OK)
+		return false;
 	
 
 	//m_pOceanTickBuffer
@@ -1960,8 +2057,191 @@ bool Dx11_Shaders::InitializeOceanShader(ID3D11Device *pDevice, WCHAR *pShaderFi
 	return true;
 }
 
+bool Dx11_Shaders::InitializeFogShader(ID3D11Device * pDevice, WCHAR * wszShaderFilename)
+{
+	ID3D10Blob *pError, *pVSBuffer, *pPSBuffer;
 
-bool Dx11_Shaders::SetOceanShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX ProjectionMat, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 vSunAmbientLight, D3DXVECTOR3 vSunDir)
+	HRESULT hr = D3DX11CompileFromFile(wszShaderFilename, NULL, NULL, "FOG_VS", "vs_4_0", D3D10_SHADER_ENABLE_STRICTNESS, 0, NULL
+		, &pVSBuffer, &pError, NULL);
+	if (hr != S_OK)
+	{
+		FILE *fp = NULL;
+		char *pCompileError = (char *)(pError->GetBufferPointer());
+		unsigned long bufferSize = pError->GetBufferSize();
+
+		fopen_s(&fp, "Data/ShaderCompileError.txt", "w");
+		if (fp)
+		{
+			for (int i = 0; i < bufferSize; i++)
+			{
+				fwrite(&pCompileError[i], sizeof(pCompileError[i]), 1, fp);
+			}
+			fclose(fp);
+		}
+		return false;
+	}
+
+
+	hr = D3DX11CompileFromFile(wszShaderFilename, NULL, NULL, "FOG_PS", "ps_4_0", D3D10_SHADER_ENABLE_STRICTNESS, 0, NULL
+		, &pPSBuffer, &pError, NULL);
+	if (hr != S_OK)
+		return false;
+
+
+	hr = pDevice->CreateVertexShader(pVSBuffer->GetBufferPointer(), pVSBuffer->GetBufferSize(), NULL, &m_pVS);
+	if (hr != S_OK)
+		return false;
+
+	hr = pDevice->CreatePixelShader(pPSBuffer->GetBufferPointer(), pPSBuffer->GetBufferSize(), NULL, &m_pPS);
+	if (hr != S_OK)
+		return false;
+
+
+	D3D11_INPUT_ELEMENT_DESC inputLayout[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+	
+	UINT numElements = ARRAYSIZE(inputLayout);
+	hr = pDevice->CreateInputLayout(inputLayout, numElements, pVSBuffer->GetBufferPointer(), pVSBuffer->GetBufferSize(), &m_pInputLayout);
+	if (hr != S_OK)
+		return false;
+
+	D3D11_BUFFER_DESC matrixBufferDesc;
+	matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	matrixBufferDesc.ByteWidth = sizeof(stMatrixBufferType);
+	matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	matrixBufferDesc.MiscFlags = 0;
+	matrixBufferDesc.StructureByteStride = 0;
+	hr = pDevice->CreateBuffer(&matrixBufferDesc, NULL, &m_pMatrixBuffer);
+	if (hr != S_OK)
+		return false;
+	
+
+	D3D11_SAMPLER_DESC samplerDesc;
+	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.MipLODBias = 0.0f;
+	samplerDesc.MaxAnisotropy = 1;
+	samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;//D3D11_COMPARISON_NEVER; //
+	samplerDesc.BorderColor[0] = 0;
+	samplerDesc.BorderColor[1] = 0;
+	samplerDesc.BorderColor[2] = 0;
+	samplerDesc.BorderColor[3] = 0;
+	samplerDesc.MinLOD = 0;
+	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+	hr = pDevice->CreateSamplerState(&samplerDesc, &m_pSamplerState);
+	if (hr != S_OK)
+		return false;
+
+
+	pVSBuffer->Release();
+	pVSBuffer = 0;
+
+	pPSBuffer->Release();
+	pPSBuffer = 0;
+
+	return true;
+}
+
+bool Dx11_Shaders::InitializeArrowShader(ID3D11Device * pDevice, WCHAR * ShaderFilename)
+{
+	ID3D10Blob *pError, *pVSBuffer, *pPSBuffer;
+
+	HRESULT hr = D3DX11CompileFromFile(ShaderFilename, NULL, NULL, "VS", "vs_4_0", D3D10_SHADER_ENABLE_STRICTNESS, 0, NULL
+		, &pVSBuffer, &pError, NULL);
+	if (hr != S_OK)
+	{
+		FILE *fp = NULL;
+		char *pCompileError = (char *)(pError->GetBufferPointer());
+		unsigned long bufferSize = pError->GetBufferSize();
+
+		fopen_s(&fp, "Data/ShaderCompileError.txt", "w");
+		if (fp)
+		{
+			for (int i = 0; i < bufferSize; i++)
+			{
+				fwrite(&pCompileError[i], sizeof(pCompileError[i]), 1, fp);
+			}
+			fclose(fp);
+		}
+		return false;
+	}
+
+
+	hr = D3DX11CompileFromFile(ShaderFilename, NULL, NULL, "PS", "ps_4_0", D3D10_SHADER_ENABLE_STRICTNESS, 0, NULL
+		, &pPSBuffer, &pError, NULL);
+	if (hr != S_OK)
+		return false;
+
+
+	hr = pDevice->CreateVertexShader(pVSBuffer->GetBufferPointer(), pVSBuffer->GetBufferSize(), NULL, &m_pVS);
+	if (hr != S_OK)
+		return false;
+
+	hr = pDevice->CreatePixelShader(pPSBuffer->GetBufferPointer(), pPSBuffer->GetBufferSize(), NULL, &m_pPS);
+	if (hr != S_OK)
+		return false;
+
+
+	D3D11_INPUT_ELEMENT_DESC inputLayout[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+	
+	UINT numElements = ARRAYSIZE(inputLayout);
+	hr = pDevice->CreateInputLayout(inputLayout, numElements, pVSBuffer->GetBufferPointer(), pVSBuffer->GetBufferSize(), &m_pInputLayout);
+	if (hr != S_OK)
+		return false;
+
+	D3D11_BUFFER_DESC matrixBufferDesc;
+	matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	matrixBufferDesc.ByteWidth = sizeof(stMatrixBufferType);
+	matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	matrixBufferDesc.MiscFlags = 0;
+	matrixBufferDesc.StructureByteStride = 0;
+	hr = pDevice->CreateBuffer(&matrixBufferDesc, NULL, &m_pMatrixBuffer);
+	if (hr != S_OK)
+		return false;
+
+	D3D11_SAMPLER_DESC samplerDesc;
+	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.MipLODBias = 0.0f;
+	samplerDesc.MaxAnisotropy = 1;
+	samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+	samplerDesc.BorderColor[0] = 0;
+	samplerDesc.BorderColor[1] = 0;
+	samplerDesc.BorderColor[2] = 0;
+	samplerDesc.BorderColor[3] = 0;
+	samplerDesc.MinLOD = 0;
+	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+	hr = pDevice->CreateSamplerState(&samplerDesc, &m_pSamplerState);
+	if (hr != S_OK)
+		return false;
+
+	pVSBuffer->Release();
+	pVSBuffer = 0;
+
+	pPSBuffer->Release();
+	pPSBuffer = 0;
+
+
+	return true;	
+}
+
+
+bool Dx11_Shaders::SetOceanShaderParameters(ID3D11DeviceContext* pDeviceContext, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX ProjectionMat, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 vSunAmbientLight, D3DXVECTOR3 vSunDir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos)
 {
 	D3DXMatrixTranspose(&worldMat, &worldMat);
 	D3DXMatrixTranspose(&viewMat, &viewMat);
@@ -1976,7 +2256,9 @@ bool Dx11_Shaders::SetOceanShaderParameters(ID3D11DeviceContext* pDeviceContext,
 	dataPtr = (stMatrixBufferType *)mappedResource.pData;
 	dataPtr->world = worldMat;
 	dataPtr->view = viewMat;
+	dataPtr->vCameraPosition = vCamPos;//D3DXVECTOR3(viewMat._41, viewMat._42, viewMat._43);
 	dataPtr->projection = ProjectionMat;	
+
 	pDeviceContext->Unmap(m_pMatrixBuffer, 0);
 
 	D3D11_MAPPED_SUBRESOURCE mappedResource2;
@@ -1999,9 +2281,20 @@ bool Dx11_Shaders::SetOceanShaderParameters(ID3D11DeviceContext* pDeviceContext,
 	pSunData->fPaddingValue = 0.0f;
 	pDeviceContext->Unmap(m_pSunInfoBuffer, 0);
 
+	hr = pDeviceContext->Map(m_pFogBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	if (hr != S_OK)
+		return false;
+	stFogParameter *fogPtr;
+	fogPtr = (stFogParameter*)mappedResource.pData;
+	fogPtr->fFogStart = fFogStart;
+	fogPtr->fFogEnd = fFogEnd;
+	fogPtr->padding = D3DXVECTOR2(0.0f, 0.0f);
+	pDeviceContext->Unmap(m_pFogBuffer, 0);
+
 	pDeviceContext->VSSetConstantBuffers(0, 1, &m_pMatrixBuffer);
 	pDeviceContext->VSSetConstantBuffers(1, 1, &m_pOceanTickBuffer);
 	pDeviceContext->VSSetConstantBuffers(2, 1, &m_pSunInfoBuffer);
+	pDeviceContext->VSSetConstantBuffers(3, 1, &m_pFogBuffer);
 
 	pDeviceContext->PSSetShaderResources(0, 1, &pTextureRV);
 
@@ -2010,12 +2303,39 @@ bool Dx11_Shaders::SetOceanShaderParameters(ID3D11DeviceContext* pDeviceContext,
 	return true;
 }
 
-void Dx11_Shaders::RenderOceanShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 vLightColor, D3DXVECTOR3 vSunDir)
+bool Dx11_Shaders::SetArrowParameters(ID3D11DeviceContext *pDeviceContext, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX ProjectionMat, ID3D11ShaderResourceView * pTextureRV)
+{
+	D3DXMatrixTranspose(&worldMat, &worldMat);
+	D3DXMatrixTranspose(&viewMat, &viewMat);
+	D3DXMatrixTranspose(&ProjectionMat, &ProjectionMat);
+
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	HRESULT hr = pDeviceContext->Map(m_pMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	if (hr != S_OK)
+		return false;
+
+	stMatrixBufferType *dataPtr;
+	dataPtr = (stMatrixBufferType*)mappedResource.pData;
+	dataPtr->world = worldMat;
+	dataPtr->view = viewMat;
+	dataPtr->projection = ProjectionMat;
+
+	pDeviceContext->Unmap(m_pMatrixBuffer, 0);
+
+	pDeviceContext->VSSetConstantBuffers(0, 1, &m_pMatrixBuffer);
+	pDeviceContext->PSSetShaderResources(0, 1, &pTextureRV);
+	
+	return true;
+}
+
+
+
+void Dx11_Shaders::RenderOceanShader(ID3D11DeviceContext *pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView *pTextureRV, float _time, D3DXVECTOR4 vLightColor, D3DXVECTOR3 vSunDir, float fFogStart, float fFogEnd, D3DXVECTOR3 vCamPos)
 {
 	if (pDeviceContext)
 	{		
 		pDeviceContext->IASetInputLayout(m_pInputLayout);
-		if (SetOceanShaderParameters(pDeviceContext, worldMat, viewMat, projectionMat, pTextureRV, _time, vLightColor, vSunDir))
+		if (SetOceanShaderParameters(pDeviceContext, worldMat, viewMat, projectionMat, pTextureRV, _time, vLightColor, vSunDir, fFogStart, fFogEnd, vCamPos))
 		{
 			pDeviceContext->VSSetShader(m_pVS, NULL, 0);
 			pDeviceContext->PSSetShader(m_pPS, NULL, 0);
@@ -2025,3 +2345,20 @@ void Dx11_Shaders::RenderOceanShader(ID3D11DeviceContext *pDeviceContext, int in
 	}
 
 }
+
+
+void Dx11_Shaders::RenderArrowShader(ID3D11DeviceContext * pDeviceContext, int indexCount, D3DXMATRIX worldMat, D3DXMATRIX viewMat, D3DXMATRIX projectionMat, ID3D11ShaderResourceView * pTexture)
+{
+	if (pDeviceContext)
+	{
+		pDeviceContext->IASetInputLayout(m_pInputLayout);
+		if (SetArrowParameters(pDeviceContext, worldMat, viewMat, projectionMat, pTexture))
+		{
+			pDeviceContext->VSSetShader(m_pVS, NULL, 0);
+			pDeviceContext->PSSetShader(m_pPS, NULL, 0);
+			pDeviceContext->PSSetSamplers(0, 1, &m_pSamplerState);
+			pDeviceContext->DrawIndexed(indexCount, 0, 0);
+		}
+	}
+}
+

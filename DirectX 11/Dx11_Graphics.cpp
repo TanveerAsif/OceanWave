@@ -2,20 +2,42 @@
 #include <D3DX10math.h>
 #include <mmsystem.h>
 
+
+//////////////////////////////////////////////////////////////////////////
+////FLEX 
+//#include <NvFlex.h>
+//#include <NvFlexExt.h>
+//#include <NvFlexDevice.h>
+//
+//#include "types.h"
+//#include "maths.h"
+//#include "platform.h"
+//#include "mesh.h"
+//#include "voxelize.h"
+//#include "sdf.h"
+//#include "pfm.h"
+//#include "tga.h"
+//#include "perlin.h"
+//#include "convex.h"
+//#include "cloth.h"
+
+//////////////////////////////////////////////////////////////////////////
+
 const float SCREEN_DEPTH = 10000.0f;
 const float SCREEN_NEAR = 0.1f;
 const int SHADOW_WIDTH = 1024; 
 const int SHADOW_HEIGHT = 1024;
 
+bool g_bComeOutFromWater = false;
+bool g_bRenderWatertoAir = false;
+float g_fInAirDuration = 0.0f;
 
 Dx11_Graphics::Dx11_Graphics()
-{
-	
+{	
 	m_pDirect3D = new Dx11_Direct3D();
 	m_pShader = new Dx11_Shaders();
 	m_pModel = new Dx11_Model();
 	m_pCamera = new Dx11_Camera();
-
 
 	m_pFloorModel = new Dx11_Model();
 	m_pReflectionShader = new Dx11_Shaders();
@@ -78,6 +100,20 @@ Dx11_Graphics::Dx11_Graphics()
 
 	m_pOceanWater = new Dx11_Ocean();
 	m_pOceanShader = new Dx11_Shaders();
+
+	//FOG SHADER	
+	m_fFogStart = 0.0f;
+	m_fFogEnd = 0.0f;
+
+
+	m_pScreenSurface = new Dx11_Render2Texture();
+	m_pOnScreenRendering = new Dx11_OnScreenRendering();
+
+
+	//ARROW
+	m_pArrowMesh = new Dx11_Model();
+	m_pArrowShader = new Dx11_Shaders();
+
 }
 
 
@@ -92,8 +128,10 @@ bool Dx11_Graphics::Initialize(HWND hWnd)
 
 	bool bRetValue = false;
 	
-	m_nScreenWidth = GetSystemMetrics(SM_CXSCREEN);
-	m_nScreenHeight = GetSystemMetrics(SM_CYSCREEN);
+	//m_nScreenWidth = GetSystemMetrics(SM_CXSCREEN);
+	//m_nScreenHeight = GetSystemMetrics(SM_CYSCREEN);
+	m_nScreenWidth = 1500;
+	m_nScreenHeight = 900;
 	
 	if (m_pDirect3D->Initialize(hWnd, m_nScreenWidth, m_nScreenHeight))
 	{		
@@ -163,7 +201,9 @@ bool Dx11_Graphics::Initialize(HWND hWnd)
 
 
 		//SKY
-		bRetValue = m_pSky->InitSky(pDevice, L"Data/cloud002.dds");		
+		//cloud002.dds
+		//sky sunset blue gold clouds.jpg		
+		bRetValue = m_pSky->InitSky(pDevice, L"Data/sky.jpg");		
 		if (!bRetValue)
 			return bRetValue;
 		bRetValue = m_pSkyShader->InitializeSkyShader(pDevice, L"Data/MySkyShader.hlsl");
@@ -258,7 +298,11 @@ bool Dx11_Graphics::Initialize(HWND hWnd)
 
 
 		/////////////////////////////////////////////////////////////////////////////////////////
-		bRetValue = m_pOceanWater->InitializeOcean(pDevice, L"Data/ocean2.dds");//ocean.png
+		//ocean.png 
+		//ocean2.dds
+		//wave1.bmp
+		//surface_normals.dds
+		bRetValue = m_pOceanWater->InitializeOcean(pDevice, L"Data/ocean2.dds");
 		if (!bRetValue)
 			return bRetValue;
 
@@ -267,11 +311,82 @@ bool Dx11_Graphics::Initialize(HWND hWnd)
 			return bRetValue;
 
 		/////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+		/////////////////////////////////////////////////////////////////////////////////////////
+		//OnScreenEffects
+		bRetValue = m_pOnScreenRendering->initScreenSpace(pDevice);
+		if (!bRetValue)
+			return bRetValue;
+		
+		bRetValue = m_pScreenSurface->Initialize(pDevice, 1024, 1024, SCREEN_NEAR, SCREEN_DEPTH);
+		if (!bRetValue)
+			return bRetValue;
+		
+		bRetValue = m_pArrowMesh->LoadArrowModel(pDevice);
+		if (!bRetValue)
+			return bRetValue;
+
+		bRetValue = m_pArrowShader->InitializeArrowShader(pDevice, L"Data/MyArrowShader.hlsl");
+		if (!bRetValue)
+			return bRetValue;
+
 	}
 	else
 		MessageBox(hWnd, L"COULD NOT INITIALIZE Direct3D", L"error", MB_ICONEXCLAMATION | MB_OK);
 	
 	
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//////////FLEX 
+		////////NvFlexLibrary* library = NvFlexInit();
+		////////NvFlexSolver* solver = NvFlexCreateSolver(library);
+
+		////////NvFlexBuffer* particleBuffer = NvlexAllocBuffer(library, n, sizeof(Vec4), eNvFlexBufferHost);
+		////////NvFlexBuffer* velocityBuffer = NvlexAllocBuffer(library, n, sizeof(Vec4), eNvFlexBufferHost);
+		////////NvFlexBuffer* phaseBuffer = NvlexAllocBuffer(library, n, sizeof(int), eNvFlexBufferHost);
+
+		////////while (!done)
+		////////{
+		////////	// map buffers for reading / writing
+		////////	float4* particles = (float4*)NvlexMap(particles, eNvFlexMapWait);
+		////////	float3* velocities = (float3*)NvFlexMap(velocities, eNvFlexMapWait);
+		////////	int* phases = (int*)NvFlexMap(phases, eNvFlexMapWait);
+
+		////////	// spawn (user method)
+		////////	SpawnParticles(particles, velocities, phases);
+
+		////////	// render (user method)
+		////////	RenderParticles(particles, velocities, phases);
+
+		////////	// unmap buffers
+		////////	NvFlexUnmap(particleBuffer);
+		////////	NvFlexUnmap(velocityBuffer);
+		////////	NvFlexUnmap(phaseBuffer);
+
+		////////	// write to device (async)
+		////////	NvFlexSetParticles(particleBuffer, n);
+		////////	NvFlexSetVelocities(velocityBuffer, n);
+		////////	NvFlexSetPhases(phaseBuffer, n);
+
+		////////	// tick
+		////////	NvFlexUpdateSolver(solver, dt, 1, false);
+
+		////////	// read back (async)
+		////////	NvFlexGetParticles(particleBuffer, n);
+		////////	NvFlexGetVelocities(velocityBuffer, n);
+		////////	NvFlexGetPhases(phaseBuffer, n);
+		////////}
+
+		////////NvFlexFreeBuffer(particleBuffer);
+		////////NvFlexFreeBuffer(velocityBuffer);
+		////////NvFlexFreeBuffer(phaseBuffer);
+
+		////////NvFlexDestroySolver(solver);
+		////////NvFlexShutdown(library);
+		//////////////////////////////////////////////////////////////////////////
+		
 	return bRetValue;
 }
 
@@ -285,6 +400,43 @@ void Dx11_Graphics::Process(float _fTick)
 	m_pParticleSystem->Prcoess(m_pDirect3D->GetDeviceContext(), _fTick);
 	m_pOceanWater->Process(_fTick);
 
+	D3DXVECTOR3 vCameraPosition = m_pCamera->GetPosition();
+	if (vCameraPosition.y == 0)
+	{
+		 m_pOnScreenRendering->Process(_fTick);
+	}
+
+	if (vCameraPosition.y < 0)
+	{
+		g_bComeOutFromWater = true;
+		g_bRenderWatertoAir = false;
+		g_fInAirDuration = 0.0f;			
+	}
+		
+	if (g_bComeOutFromWater)
+	{
+		if (vCameraPosition.y >= 1)
+		{
+			g_bRenderWatertoAir = true;			
+			g_bComeOutFromWater = false;
+		}
+	}
+
+	if (g_bRenderWatertoAir)
+	{
+		g_fInAirDuration += _fTick;
+		if (g_fInAirDuration < 2.0f)
+		{
+			m_pOnScreenRendering->SetWaterToAirState(true);			
+		}		
+		else
+		{		
+			g_bRenderWatertoAir = false;									
+			m_pOnScreenRendering->SetWaterToAirState(false);
+		}		
+	}
+	
+
 }
 
 void Dx11_Graphics::Render(float _fTick)
@@ -293,7 +445,22 @@ void Dx11_Graphics::Render(float _fTick)
 	//RenderReflectionSurface(_fTick);
 	
 	//RenderShadowMapOfSunLight(_fTick);
-	RenderScene(_fTick);
+
+	D3DXVECTOR3 vCameraPosition = m_pCamera->GetPosition();
+	if (vCameraPosition.y == 0)
+	{
+		RenderWaterEffectsOnScreen(_fTick);
+	}
+	else
+	{
+		RenderScene(_fTick);
+	}
+	//RenderScene(_fTick);
+
+
+	
+	
+	
 }
 
 void Dx11_Graphics::Shutdown()
@@ -528,6 +695,7 @@ void Dx11_Graphics::RenderShadowMapOfSunLight(float _fTick)
 
 
 	m_pDirect3D->SetBackBufferRenderTarget();
+
 }
 
 
@@ -608,25 +776,32 @@ void Dx11_Graphics::RenderScene(float _fTick)
 		ID3D11DeviceContext *pDeviceContext = m_pDirect3D->GetDeviceContext();
 
 		D3DXMATRIX viewMat, worldMat, projectionMat, reflectionMat, orthoMat, sunViewMatrix, sunProjMatrix;
-		D3DXMATRIX matTranslationMatrix, matScalingMatrix, matRotationMatrix;
+		D3DXMATRIX matTranslationMatrix, matScalingMatrix, matRotationMatrix, transformationMat;
 
 		worldMat = m_pDirect3D->GetWorldMatrix();
 		viewMat = m_pCamera->GetViewMatrix();		
 		projectionMat = m_pDirect3D->GetPerspectiveProjectionMatrix();
 		
+		D3DXVECTOR3 vCameraPosition = m_pCamera->GetPosition();
+		
 		
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//RENDER SKY : SET SKY At DISTANCE OF 250 FROM ORIGIN				
-		m_pDirect3D->EnableBlendState2();
+		m_pDirect3D->EnableBlendState2();		
 		worldMat = m_pDirect3D->GetWorldMatrix();		
-		D3DXMatrixTranslation(&matTranslationMatrix, 0.0f, m_pSky->GetRadius() - 550, 0);
-		worldMat = matTranslationMatrix *worldMat;
+		D3DXMATRIX matRotBy90, matRotBy90OnZAxis;
+		D3DXMatrixRotationX(&matRotBy90, (90 * D3DX_PI) / 180);
+		D3DXMatrixRotationZ(&matRotBy90OnZAxis, (90 * D3DX_PI) / 180);
+		D3DXMatrixTranslation(&matTranslationMatrix, 0.0f, m_pSky->GetRadius() - 515.0f, 0.0f);
+		worldMat =  matTranslationMatrix * worldMat;
 		m_pSky->Render(pDeviceContext);
-		m_pSkyShader->RenderSkyShader(pDeviceContext, m_pSky->GetIndexCount(), worldMat, viewMat, projectionMat, m_pSky->GetTexture());		
+		m_pSkyShader->RenderSkyShader(pDeviceContext, m_pSky->GetIndexCount(), worldMat, viewMat, projectionMat, m_pSky->GetTexture(), m_fFogStart, m_fFogEnd, vCameraPosition);
+		
 
 		//RENDER SUN		
 		if (m_bSunLightEnable == true)
 		{
+			/*
 			worldMat = m_pDirect3D->GetWorldMatrix();				
 			
 			D3DXVECTOR3 vSun = m_pSun->GetPosition();			
@@ -637,6 +812,7 @@ void Dx11_Graphics::RenderScene(float _fTick)
 			worldMat = matRotBy90 * matTranslationMatrix * worldMat;
 			m_pSun->RenderSun(pDeviceContext);
 			m_pSkyShader->RenderSkyShader(pDeviceContext, m_pSun->GetIndexCount(), worldMat, viewMat, projectionMat, m_pSun->GetTextureSRView());
+			*/
 		}
 		m_pDirect3D->DisableBlendState();
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -655,16 +831,15 @@ void Dx11_Graphics::RenderScene(float _fTick)
 			m_pCubeShader->RenderCubeShader(m_pDirect3D->GetDeviceContext(), m_pCubeModel->GetCubeIndexCount(), worldMat, viewMat, projectionMat, m_pCubeModel->GetTextureSRView());
 		}
 		else
-		{
-			/*m_pLightSourceShader->RenderShader(pDeviceContext, m_pCubeModel->GetCubeIndexCount(), worldMat, viewMat, projectionMat,
-												m_pCubeModel->GetTextureSRView(),
-												m_pLightSource->GetDiffuseLight(), m_pLightSource->GetAmbientLight(), m_pLightSource->GetLightDir());*/
-
+		{			
+			ID3D11ShaderResourceView* pTexture = m_pCubeModel->GetTextureSRView();
+			/*if (vCameraPosition.y <= 0)
+				pTexture = m_pScreenSurface->GetShaderResourceView();*/			
 			D3DXVECTOR3 vSunDir = D3DXVECTOR3(0, 0, 0) - m_pSun->GetPosition();
 			D3DXVec3Normalize(&vSunDir, &vSunDir);
 			m_pLightSourceShader->RenderShader(pDeviceContext, m_pCubeModel->GetCubeIndexCount(), worldMat, viewMat, projectionMat,
-				m_pCubeModel->GetTextureSRView(),
-				m_pLightSource->GetDiffuseLight(), m_pLightSource->GetAmbientLight(), vSunDir);			
+				pTexture,
+				m_pLightSource->GetDiffuseLight(), m_pLightSource->GetAmbientLight(), vSunDir, m_fFogStart, m_fFogEnd, vCameraPosition);
 		}
 		
 		
@@ -710,14 +885,14 @@ void Dx11_Graphics::RenderScene(float _fTick)
 		{
 			//DEPTH MAP MODEL
 			worldMat = m_pDirect3D->GetWorldMatrix();			
-			D3DXMatrixTranslation(&matTranslationMatrix, 0, 20, 0);			
-			D3DXMatrixScaling(&matScalingMatrix, 10.0f, 10.0f, 1.0f);
+			D3DXMatrixTranslation(&matTranslationMatrix, 0, 5, 10);			
+			D3DXMatrixScaling(&matScalingMatrix, 5.0f, 1.0f, 5.0f);
 			worldMat = matScalingMatrix * matTranslationMatrix * worldMat;
 			viewMat = m_pCamera->GetViewMatrix();
 			//orthoMat = m_pDirect3D->GetOrthogonalProjectionMatrix();
 			projectionMat = m_pDirect3D->GetPerspectiveProjectionMatrix();
 			m_pDepthMapModel->RenderDepthMapModel(pDeviceContext);
-			m_pDepthMapModelShader->RenderDepthMapModelShader(pDeviceContext, m_pDepthMapModel->GetIndexCount(), worldMat, viewMat, /*orthoMat*/projectionMat, m_pShadowMapSurface->GetShaderResourceView());
+			m_pDepthMapModelShader->RenderDepthMapModelShader(pDeviceContext, m_pDepthMapModel->GetIndexCount(), worldMat, viewMat, /*orthoMat*/projectionMat, m_pScreenSurface->GetShaderResourceView());
 			
 		}
 		
@@ -758,11 +933,11 @@ void Dx11_Graphics::RenderScene(float _fTick)
 		
 		//RENDER WATER
 		worldMat = m_pDirect3D->GetWorldMatrix();
-		D3DXMatrixTranslation(&matTranslationMatrix, -5, 0, -5);		
+		D3DXMatrixTranslation(&matTranslationMatrix, -75.0f * 2.5f, 0.0f, -75.0f* 2.5f);
 		worldMat = matTranslationMatrix * worldMat;
 		viewMat = m_pCamera->GetViewMatrix();
 		m_pOceanWater->Render(pDeviceContext);
-		m_pOceanShader->RenderOceanShader(pDeviceContext, m_pOceanWater->GetIndexCount(), worldMat, viewMat, projectionMat, m_pOceanWater->GetTexture(), m_pOceanWater->GetTime(), m_pLightSource->GetAmbientLight(), vSunDir);
+		m_pOceanShader->RenderOceanShader(pDeviceContext, m_pOceanWater->GetIndexCount(), worldMat, viewMat, projectionMat, m_pOceanWater->GetTexture(), m_pOceanWater->GetTime(), m_pLightSource->GetAmbientLight(), vSunDir, m_fFogStart, m_fFogEnd, vCameraPosition);
 
 
 
@@ -776,8 +951,6 @@ void Dx11_Graphics::RenderScene(float _fTick)
 			m_pParticleSystem->Render(pDeviceContext);
 			m_pParticleShader->RenderParticleShader(pDeviceContext, m_pParticleSystem->GetIndexCount(), worldMat, viewMat, projectionMat, m_pParticleSystem->GetTexture());
 		}
-
-		
 
 
 		/*
@@ -793,10 +966,37 @@ void Dx11_Graphics::RenderScene(float _fTick)
 		m_pDepthShader->RenderShader(pDeviceContext, m_pDepthModel->GetIndexCount(), worldMat, viewMat, projectionMat);
 		m_pDirect3D->DisableBlendState();
 		*/
+
 		
+		if (vCameraPosition.y > 0 && 0)
+		{
+			m_pDirect3D->EnableBlendState();
+			worldMat = m_pDirect3D->GetWorldMatrix();
+			D3DXVECTOR3 vCamDir = m_pCamera->GetDirection();
+			D3DXVec3Normalize(&vCamDir, &vCamDir);
+			D3DXVECTOR3 vNewArrowPos = vCameraPosition + (vCamDir * 4.0);
+			D3DXVECTOR3 vCubePostion = D3DXVECTOR3(0, vCameraPosition.y, 0);		 //Cube is Fixed at origin	at Camera Level
+			D3DXVECTOR3 vDir2Cube = vCubePostion - vNewArrowPos;
+			D3DXVec3Normalize(&vDir2Cube, &vDir2Cube);
+			D3DXVECTOR3 vZeeDir = D3DXVECTOR3(0, 0, 1);
+			float fArrowHeading = acos(D3DXVec3Dot(&vZeeDir, &vDir2Cube)); //Angle bw Dir2Cube and CameraDir
+			
+			D3DXVECTOR3 vRotAxis;
+			D3DXVec3Cross(&vRotAxis, &vZeeDir, &vDir2Cube);
+			D3DXVec3Normalize(&vRotAxis, &vRotAxis);
+			//fArrowHeading = atan2(vDir2Cube.x, vDir2Cube.z);
+
+			
+			D3DXMatrixTranslation(&matTranslationMatrix, vNewArrowPos.x, vNewArrowPos.y - 0.5, vNewArrowPos.z); //Adding in Y  so that little higher from camera level			
+			D3DXMatrixRotationAxis(&matRotationMatrix, &vRotAxis, fArrowHeading);			
+			transformationMat = matRotationMatrix * matTranslationMatrix * worldMat;
+			m_pArrowMesh->RenderArrowModel(pDeviceContext);
+			m_pArrowShader->RenderArrowShader(pDeviceContext, m_pArrowMesh->GetIndexCount(), transformationMat, viewMat, projectionMat, m_pArrowMesh->GetTextureSRView());
+			m_pDirect3D->DisableBlendState();
+		}
 
 		//RENDER TEXT
-		m_pDirect3D->SetDepthBufferOFF();
+		/*m_pDirect3D->SetDepthBufferOFF();
 		m_pDirect3D->EnableBlendState();
 		worldMat = m_pDirect3D->GetWorldMatrix();
 		orthoMat = m_pDirect3D->GetOrthogonalProjectionMatrix();
@@ -807,11 +1007,78 @@ void Dx11_Graphics::RenderScene(float _fTick)
 		m_pText->Render(pDeviceContext, strCameraPos, worldMat, orthoMat);
 
 		m_pDirect3D->DisableBlendState();
-		m_pDirect3D->SetDepthBufferON();
+		m_pDirect3D->SetDepthBufferON();*/
 		
 		m_pDirect3D->EndScene();
 	}
 
+}
+
+void Dx11_Graphics::RenderWaterEffectsOnScreen(float _fTick)
+{
+	ID3D11DeviceContext *pDeviceContext = m_pDirect3D->GetDeviceContext();
+
+	m_pScreenSurface->SetRenderTarget(pDeviceContext);	
+	float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };	//BLACK
+	m_pScreenSurface->BeginScene(pDeviceContext, clearColor);
+
+	
+	D3DXMATRIX viewMat, worldMat, projectionMat;
+	D3DXMATRIX matTranslationMatrix, matScalingMatrix, matRotationMatrix;
+
+	worldMat = m_pDirect3D->GetWorldMatrix();	
+	D3DXVECTOR3 vCamPos = m_pCamera->GetPosition();
+	D3DXVECTOR3 vCamDir = m_pCamera->GetDirection();
+	vCamPos.y = 1.0f;													//Placing Camera just above the water 
+	viewMat = m_pCamera->GetViewMatrix(vCamPos.x, vCamPos.y, vCamPos.z, vCamDir.x, vCamDir.y, vCamDir.z);
+	projectionMat = m_pScreenSurface->GetProjectionMatrix();// m_pDirect3D->GetPerspectiveProjectionMatrix();
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//RENDER SKY : SET SKY At DISTANCE OF 250 FROM ORIGIN					
+	worldMat = m_pDirect3D->GetWorldMatrix();	
+	D3DXMatrixTranslation(&matTranslationMatrix, 0.0f, m_pSky->GetRadius() - 515.0f, 0.0f);
+	worldMat = matTranslationMatrix * worldMat;
+	m_pSky->Render(pDeviceContext);
+	m_pSkyShader->RenderSkyShader(pDeviceContext, m_pSky->GetIndexCount(), worldMat, viewMat, projectionMat, m_pSky->GetTexture(), m_fFogStart, m_fFogEnd, vCamPos);
+
+
+	//RENDER CUBE  ON ORIGIN(0,0,0)
+	worldMat = m_pDirect3D->GetWorldMatrix();
+	D3DXMatrixIdentity(&matRotationMatrix);
+	D3DXMatrixRotationY(&matRotationMatrix, m_pCubeModel->GetHeading());
+	worldMat = matRotationMatrix*worldMat;	
+	D3DXVECTOR3 vSunDir = D3DXVECTOR3(0, 0, 0) - m_pSun->GetPosition();
+	m_pCubeModel->RenderCube(m_pDirect3D->GetDeviceContext());
+	D3DXVec3Normalize(&vSunDir, &vSunDir);
+	m_pLightSourceShader->RenderShader(pDeviceContext, m_pCubeModel->GetCubeIndexCount(), worldMat, viewMat, projectionMat,
+		m_pCubeModel->GetTextureSRView(),
+		m_pLightSource->GetDiffuseLight(), m_pLightSource->GetAmbientLight(), vSunDir, m_fFogStart, m_fFogEnd, vCamPos);
+
+	
+	//RENDER WATER
+	worldMat = m_pDirect3D->GetWorldMatrix();
+	D3DXMatrixTranslation(&matTranslationMatrix, -75.0f * 2.5f, 0.0f, -75.0f* 2.5f);
+	worldMat = matTranslationMatrix * worldMat;	
+	m_pOceanWater->Render(pDeviceContext);
+	m_pOceanShader->RenderOceanShader(pDeviceContext, m_pOceanWater->GetIndexCount(), worldMat, viewMat, projectionMat, m_pOceanWater->GetTexture(), m_pOceanWater->GetTime(), m_pLightSource->GetAmbientLight(), vSunDir, m_fFogStart, m_fFogEnd, vCamPos);
+
+	m_pDirect3D->SetBackBufferRenderTarget();
+
+	//RENDER ON SCREEN
+	if (m_pDirect3D->BeginScene())
+	{
+		ID3D11Device *pDevice = m_pDirect3D->GetDevice();		
+		D3DXVECTOR3 vCameraPosition = m_pCamera->GetPosition();
+		
+		worldMat = m_pDirect3D->GetWorldMatrix();				
+		viewMat = m_pCamera->GetViewMatrix();
+		projectionMat = m_pDirect3D->GetPerspectiveProjectionMatrix();
+		m_pOnScreenRendering->RenderScreenSpace(pDeviceContext, m_pScreenSurface->GetShaderResourceView(), worldMat, viewMat, projectionMat, vCameraPosition, _fTick);
+		
+
+		m_pDirect3D->EndScene();
+	}
 }
 
 
@@ -923,3 +1190,16 @@ void Dx11_Graphics::ShowDepthMap()
 {
 	m_bShowDepthMapEnable = (m_bShowDepthMapEnable == false) ? true : false;
 }
+
+void Dx11_Graphics::SetFogParameter()
+{
+	m_fFogStart = 0.0f;
+	m_fFogEnd += 10.0f;
+
+	if (GetAsyncKeyState(VK_SHIFT))
+	{
+		//Reset FOG Parameter
+		//m_fFogEnd  = m_fFogStart = 0.0f;		
+	}
+}
+

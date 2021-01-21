@@ -37,6 +37,7 @@ public:
 	void Shutdown();
 
 	void BeginScene(ID3D11DeviceContext *pContext);
+	void BeginScene(ID3D11DeviceContext *pContext, float *pClearColor); 
 	void SetRenderTarget(ID3D11DeviceContext *pContext);
 	ID3D11ShaderResourceView* GetShaderResourceView(){ return m_pShaderResView; }
 

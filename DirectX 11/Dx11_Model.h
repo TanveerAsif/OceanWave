@@ -126,5 +126,9 @@ public:
 	bool LoadDepthMapModel(ID3D11Device *pDevice);
 	void RenderDepthMapModel(ID3D11DeviceContext *pDeviceContext);
 
+	bool LoadArrowModel(ID3D11Device *pDevice);
+	void RenderArrowModel(ID3D11DeviceContext *pDeviceContext);
+
+
 };
 

@@ -6,10 +6,12 @@ Dx11_Camera::Dx11_Camera()
 
 	//m_fPosX = m_fPosY = m_fPosZ = 0.0f;	
 	m_fYaw = m_fPitch = m_fRoll = 0.0f;
+	//m_fPitch = -1.0f;
 
 	m_vUp = D3DXVECTOR3(0, 1, 0);
 	//m_vPos = D3DXVECTOR3(0, 5, -30);
-	m_vPos = D3DXVECTOR3(0, 3, -14);
+	//m_vPos = D3DXVECTOR3(-1, 2, -14);
+	m_vPos = D3DXVECTOR3(0, 2, -10);
 	m_vFrwdDir = D3DXVECTOR3(0, 0, 1);
 	
 	D3DXVECTOR3 vDir;
@@ -227,3 +229,16 @@ D3DXMATRIX Dx11_Camera::GetViewMatrix(D3DXVECTOR3 vCameraPos, D3DXVECTOR3 vCamer
 	
 	return matReflection;
 }
+
+D3DXMATRIX Dx11_Camera::GetViewMatrix(float posx, float posy, float posz, float dirx, float diry, float dirz)
+{
+	D3DXVECTOR3 vCameraPos(posx, posy, posz);
+	D3DXVECTOR3 vCameraDir(dirx, diry, dirz);
+
+	D3DXMATRIX matReflection;
+	D3DXMatrixLookAtLH(&matReflection, &vCameraPos, &vCameraDir, &m_vUp);
+
+	return matReflection;
+}
+
+
