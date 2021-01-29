@@ -172,14 +172,14 @@ bool Dx11_Graphics::Initialize(HWND hWnd)
 		if (!bRetValue)
 			return bRetValue;
 
-
+#ifdef _FI_SIMLIGHTEX_
 		AddLight(LGT_FLASHING, LGT_WHITE);
 		AddLight(LGT_QUICK_FLASHING, LGT_GREEN);
 		AddLight(LGT_QUICK_FLASHING, LGT_RED);
 		AddLight(LGT_FIXED, LGT_WHITE);
 		AddLight(LGT_ULTRA_QUICK_FLASHING, LGT_YELLOW);
 		AddLight(LGT_ISOPHASED, LGT_BLUE);
-
+#endif
 
 		/*m_pCamera->Process();	*/	
 		D3DXMATRIX matViewMatrix = m_pCamera->GetViewMatrix();
@@ -1082,9 +1082,10 @@ void Dx11_Graphics::RenderWaterEffectsOnScreen(float _fTick)
 }
 
 
-
+#ifdef _FI_SIMLIGHTEX_
 void Dx11_Graphics::AddLight(LGT_LITCHR TypeOfLight, LGT_COLOR ColorOfLight)
 {
+
 	FI_LightSector *pSector = NULL;
 	FI_SectorPulse *pPulse = NULL;
 
@@ -1109,7 +1110,7 @@ void Dx11_Graphics::AddLight(LGT_LITCHR TypeOfLight, LGT_COLOR ColorOfLight)
 
 	m_vLights.push_back(pLight);
 }
-
+#endif
 
 void Dx11_Graphics::UpdateCamera(char action)
 {

@@ -68,7 +68,10 @@ private:
 	void RenderScene(float _fTick);
 	void RenderWaterEffectsOnScreen(float _fTick);
 
+#ifdef _FI_SIMLIGHTEX_
 	void AddLight(LGT_LITCHR TypeOfLight, LGT_COLOR ColorOfLight);
+#endif
+	
 
 public:
 	Dx11_Graphics();
