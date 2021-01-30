@@ -822,8 +822,22 @@ void Dx11_Graphics::RenderScene(float _fTick)
 		//RENDER CUBE  ON ORIGIN(0,0,0)
 		worldMat = m_pDirect3D->GetWorldMatrix();		
 		D3DXMatrixIdentity(&matRotationMatrix);
-		D3DXMatrixRotationY(&matRotationMatrix, m_pCubeModel->GetHeading());		
-		worldMat = matRotationMatrix*worldMat;
+		D3DXMatrixIdentity(&matTranslationMatrix);
+		//D3DXMatrixTranslation(&matTranslationMatrix, 10.0f, 0.0, 0.0f);
+		//D3DXMatrixRotationAxis(&matRotationMatrix, &D3DXVECTOR3(1, 1, 1), m_pCubeModel->GetHeading());
+		//heading is in radian
+		float xQ = 1 * sinf(m_pCubeModel->GetHeading() / 2);
+		float yQ = 1 * sinf(m_pCubeModel->GetHeading() / 2);
+		float zQ = 1 * sinf(m_pCubeModel->GetHeading() / 2);
+		float wQ = cosf(m_pCubeModel->GetHeading() / 2);
+		D3DXQUATERNION q(xQ, yQ, zQ, wQ);
+		D3DXQuaternionNormalize(&q, &q);
+		D3DXMatrixRotationQuaternion(&matRotationMatrix, &q);
+		
+		//D3DXMatrixRotationY(&matRotationMatrix, m_pCubeModel->GetHeading());		
+		//D3DXMatrixRotationX(&matRotationMatrix, m_pCubeModel->GetHeading());
+		//D3DXMatrixRotationZ(&matRotationMatrix, m_pCubeModel->GetHeading());
+		worldMat =  matRotationMatrix  * matTranslationMatrix;
 
 		m_pCubeModel->RenderCube(m_pDirect3D->GetDeviceContext());
 		if (m_bSunLightEnable == false)
